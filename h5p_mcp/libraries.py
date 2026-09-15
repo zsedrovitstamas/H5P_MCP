@@ -18,6 +18,18 @@ LIBRARIES: dict[QuizType, LibrarySpec] = {
     QuizType.blanks: ("H5P.Blanks", 1, 14),
     QuizType.questionset: ("H5P.QuestionSet", 1, 20),
     QuizType.interactivevideo: ("H5P.InteractiveVideo", 1, 28),
+    QuizType.interactivebook: ("H5P.InteractiveBook", 1, 15),
+}
+
+# Libraries that only ever appear embedded in a container, so they have no
+# QuizType of their own.
+COLUMN: LibrarySpec = ("H5P.Column", 1, 22)
+ADVANCED_TEXT: LibrarySpec = ("H5P.AdvancedText", 1, 1)
+
+# Display names for those, keyed by machineName.
+_EXTRA_CONTENT_TYPE_NAMES = {
+    "H5P.Column": "Column",
+    "H5P.AdvancedText": "Text",
 }
 
 # Human-readable names H5P shows for embedded sub-content.
@@ -27,11 +39,12 @@ CONTENT_TYPE_NAMES: dict[QuizType, str] = {
     QuizType.blanks: "Fill in the Blanks",
     QuizType.questionset: "Question Set",
     QuizType.interactivevideo: "Interactive Video",
+    QuizType.interactivebook: "Interactive Book",
 }
 
 # Interactive Video declares "iframe" in its own library.json; the flat question
 # types render fine inline.
-_IFRAME_TYPES = {QuizType.interactivevideo}
+_IFRAME_TYPES = {QuizType.interactivevideo, QuizType.interactivebook}
 
 
 def library_spec(qtype: QuizType) -> LibrarySpec:
@@ -41,16 +54,36 @@ def library_spec(qtype: QuizType) -> LibrarySpec:
         raise ValueError(f"Unsupported QuizType: {qtype}") from None
 
 
-def library_string(qtype: QuizType) -> str:
+def spec_string(spec: LibrarySpec) -> str:
     """Return the "machineName major.minor" form used inside content.json."""
-    name, major, minor = library_spec(qtype)
+    name, major, minor = spec
     return f"{name} {major}.{minor}"
 
 
-def dependency_entry(qtype: QuizType) -> dict[str, Any]:
+def library_string(qtype: QuizType) -> str:
+    return spec_string(library_spec(qtype))
+
+
+def dependency_entry_for_spec(spec: LibrarySpec) -> dict[str, Any]:
     """Return one h5p.json preloadedDependencies entry."""
-    name, major, minor = library_spec(qtype)
+    name, major, minor = spec
     return {"machineName": name, "majorVersion": major, "minorVersion": minor}
+
+
+def dependency_entry(qtype: QuizType) -> dict[str, Any]:
+    return dependency_entry_for_spec(library_spec(qtype))
+
+
+def spec_metadata(spec: LibrarySpec, title: str) -> dict[str, Any]:
+    """subcontent_metadata() for a library that has no QuizType."""
+    name = spec[0]
+    return {
+        "contentType": _EXTRA_CONTENT_TYPE_NAMES.get(name, name),
+        "license": "U",
+        "title": title,
+        "authors": [],
+        "changes": [],
+    }
 
 
 def embed_types(qtype: QuizType) -> list[str]:

@@ -14,6 +14,7 @@ It **does not bundle H5P libraries** (that’s normal for content exports). Your
 - `H5P.Blanks`
 - `H5P.QuestionSet`
 - `H5P.InteractiveVideo`
+- `H5P.InteractiveBook` (with `H5P.Column` and `H5P.AdvancedText`)
 
 ## Project structure
 
@@ -27,14 +28,16 @@ h5p_mcp/
 │   ├── truefalse/
 │   ├── blanks/
 │   ├── questionset/
-│   └── interactivevideo/
+│   ├── interactivevideo/
+│   └── interactivebook/
 ├── libraries.py
 ├── generators/
 │   ├── mcq_generator.py
 │   ├── truefalse_generator.py
 │   ├── blanks_generator.py
 │   ├── questionset_generator.py
-│   └── interactivevideo_generator.py
+│   ├── interactivevideo_generator.py
+│   └── interactivebook_generator.py
 ├── exporters/
 │   └── h5p_exporter.py
 ├── validators/
@@ -97,6 +100,7 @@ In Cursor, configure an MCP server and point it at the same `python server.py` e
 - `create_fill_blanks_quiz(title, text, answers)`
 - `create_questionset_quiz(title, intro, questions, pass_percentage)`
 - `create_interactive_video(title, video_url, interactions, summary, start_video_at)`
+- `create_interactive_book(title, chapters, cover_description, show_cover, base_color, display_summary)`
 - `export_h5p(quiz_data, output_name)`
 - `validate_h5p(path)`
 - Bonus:
@@ -159,6 +163,39 @@ Call `create_interactive_video` with a list of interactions:
 
 Interactions are sorted by `time` during validation, so the order you pass them
 in does not matter. Then call `export_h5p` as usual.
+
+## Interactive Book
+
+A multi-chapter book mixing prose with graded activities. Each chapter is one
+page; each page holds an ordered list of sections.
+
+Call `create_interactive_book` with a list of chapters:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `title` | yes | Chapter name, shown in the table of contents |
+| `sections` | yes | Ordered blocks on that page |
+
+A section is either a prose block or a quiz dict:
+
+```json
+{"type": "text", "heading": "Overview", "body": "First para.\n\nSecond para."}
+{"type": "truefalse", "title": "Check", "question": "...", "correct_answer": true}
+```
+
+`body` is **plain text, not HTML**. Blank lines separate paragraphs, single
+newlines are soft wraps, and any markup typed in is escaped and appears
+literally. Rich formatting beyond an optional `heading` is not supported yet.
+
+## Fill in the Blanks
+
+Wrap each answer in asterisks: `"The capital of France is *Paris*."` Pass the
+same answers in the `answers` list and they are checked against the text.
+
+Author text is escaped on the way out, so `<`, `&` and quotes are safe to use.
+The asterisk delimiters are preserved, but an answer that *is* a markup
+character is escaped too — a gap whose answer is `<` is stored as `*&lt;*`.
+Use `instructions` to override the default task description.
 
 ## Markdown-to-quiz format (bonus)
 

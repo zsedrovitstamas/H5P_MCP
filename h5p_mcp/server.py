@@ -9,11 +9,14 @@ from fastmcp import FastMCP
 
 from h5p_mcp.exporters.h5p_exporter import H5PExporter
 from h5p_mcp.models.quiz_models import (
+    BookChapter,
     FillBlanksQuiz,
+    InteractiveBookQuiz,
     InteractiveVideoQuiz,
     MCQQuiz,
     QuestionSetQuiz,
     QuizModel,
+    TextSection,
     TrueFalseQuiz,
     VideoInteraction,
 )
@@ -147,6 +150,43 @@ def create_interactive_video(
 
 
 @mcp.tool()
+def create_interactive_book(
+    title: str,
+    chapters: list[dict[str, Any]],
+    cover_description: str = "",
+    show_cover: bool = True,
+    base_color: str = "#1768c4",
+    display_summary: bool = True,
+) -> dict[str, Any]:
+    """
+    Create a validated canonical Interactive Book object.
+
+    Each entry in `chapters` is one page of the book:
+      title     the chapter name, shown in the table of contents (required)
+      sections  an ordered list of blocks on that page (required)
+
+    A section is either a prose block:
+      {"type": "text", "heading": "optional", "body": "plain text"}
+    or a canonical quiz dict (mcq/truefalse/blanks), which becomes a graded
+    activity embedded in the page.
+
+    Section `body` is plain text, not HTML. Blank lines separate paragraphs and
+    single newlines are soft wraps; any markup typed in is escaped and shows up
+    literally.
+    """
+    parsed = [BookChapter.model_validate(chapter) for chapter in chapters]
+    book = InteractiveBookQuiz(
+        title=title,
+        chapters=parsed,
+        cover_description=cover_description,
+        show_cover=show_cover,
+        base_color=base_color,
+        display_summary=display_summary,
+    )
+    return book.model_dump()
+
+
+@mcp.tool()
 def export_h5p(quiz_data: dict[str, Any], output_name: str) -> dict[str, Any]:
     """
     Export a canonical quiz object to a .h5p file.
@@ -237,6 +277,36 @@ def h5p_prompt_helpers() -> dict[str, Any]:
                 "title": "Capitals",
                 "text": "The capital of France is *Paris*.",
                 "answers": ["Paris"],
+            },
+        },
+        "interactive_book": {
+            "notes": [
+                "a book is a list of chapters; each chapter is one page with an ordered list of sections",
+                "a section is either {'type': 'text', 'heading': ..., 'body': ...} or a quiz dict",
+                "section body is plain text: blank lines separate paragraphs, markup is escaped",
+                "the chapter title is what the reader sees in the table of contents",
+            ],
+            "example": {
+                "title": "Photosynthesis",
+                "cover_description": "How plants make food.",
+                "chapters": [
+                    {
+                        "title": "The basics",
+                        "sections": [
+                            {
+                                "type": "text",
+                                "heading": "Overview",
+                                "body": "Plants convert light into sugar.\n\nOxygen is released as a by-product.",
+                            },
+                            {
+                                "type": "truefalse",
+                                "title": "Check",
+                                "question": "Photosynthesis releases oxygen.",
+                                "correct_answer": True,
+                            },
+                        ],
+                    }
+                ],
             },
         },
         "interactive_video": {
@@ -378,6 +448,57 @@ def _generate_samples() -> list[Path]:
                 ],
             ),
             output_name="sample_interactivevideo_water_cycle",
+        ).output_path
+    )
+
+    # Interactive Book sample (prose and questions across chapters)
+    outputs.append(
+        exporter.export(
+            InteractiveBookQuiz(
+                title="Interactive Book - Photosynthesis",
+                cover_description="A short book on how plants turn light into food.",
+                chapters=[
+                    BookChapter(
+                        title="What photosynthesis is",
+                        sections=[
+                            TextSection(
+                                heading="Overview",
+                                body=(
+                                    "Plants use light energy to turn carbon dioxide and water into sugar.\n"
+                                    "The reaction happens inside chloroplasts.\n\n"
+                                    "Oxygen is released as a by-product, which is why the process matters "
+                                    "far beyond the plant itself."
+                                ),
+                            ),
+                            MCQQuiz(
+                                title="Where it happens",
+                                question="Which part of the cell carries out photosynthesis?",
+                                choices=["The chloroplast", "The nucleus", "The ribosome"],
+                                correct_answer="The chloroplast",
+                                explanation="Chloroplasts hold the chlorophyll that absorbs light.",
+                            ),
+                        ],
+                    ),
+                    BookChapter(
+                        title="Why it matters",
+                        sections=[
+                            TextSection(
+                                body=(
+                                    "Almost every food chain starts with a photosynthesising organism, "
+                                    "and the oxygen in the atmosphere is largely their doing."
+                                ),
+                            ),
+                            TrueFalseQuiz(
+                                title="Food chains",
+                                question="Most food chains begin with an organism that photosynthesises.",
+                                correct_answer=True,
+                                explanation="Producers capture the energy every later link depends on.",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            output_name="sample_interactivebook_photosynthesis",
         ).output_path
     )
 

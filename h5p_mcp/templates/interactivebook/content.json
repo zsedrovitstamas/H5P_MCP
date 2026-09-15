@@ -1,0 +1,52 @@
+{
+  "showCoverPage": true,
+  "behaviour": {
+    "baseColor": "#1768c4",
+    "defaultTableOfContents": true,
+    "progressIndicators": true,
+    "progressAuto": true,
+    "displaySummary": true,
+    "enableRetry": true
+  },
+  "read": "Read",
+  "displayTOC": "Display 'Table of contents'",
+  "hideTOC": "Hide 'Table of contents'",
+  "page": "Page",
+  "next": "Next",
+  "nextPage": "Next page",
+  "previous": "Previous",
+  "previousPage": "Previous page",
+  "chapterCompleted": "Page completed!",
+  "partCompleted": "@pages of @total completed",
+  "incompleteChapter": "Incomplete page",
+  "navigateToTop": "Navigate to the top",
+  "markAsFinished": "I have finished this page",
+  "fullscreen": "Fullscreen",
+  "exitFullscreen": "Exit fullscreen",
+  "bookProgressSubtext": "@count of @total pages",
+  "interactionsProgressSubtext": "@count of @total interactions",
+  "submitReport": "Submit Report",
+  "restartLabel": "Restart",
+  "summaryHeader": "Summary",
+  "allInteractions": "All interactions",
+  "unansweredInteractions": "Unanswered interactions",
+  "scoreText": "@score / @maxscore",
+  "leftOutOfTotalCompleted": "@left of @max interactions completed",
+  "noInteractions": "No interactions",
+  "score": "Score",
+  "summaryAndSubmit": "Summary &amp; submit",
+  "noChapterInteractionBoldText": "You have not interacted with any pages.",
+  "noChapterInteractionText": "You have to interact with at least one page before you can see the summary.",
+  "yourAnswersAreSubmittedForReview": "Your answers are submitted for review!",
+  "bookProgress": "Book progress",
+  "interactionsProgress": "Interactions progress",
+  "totalScoreLabel": "Total score",
+  "a11y": {
+    "progress": "Page @page of @total.",
+    "menu": "Toggle navigation menu"
+  },
+  "bookCover": {
+    "coverDescription": ""
+  },
+  "chapters": []
+}

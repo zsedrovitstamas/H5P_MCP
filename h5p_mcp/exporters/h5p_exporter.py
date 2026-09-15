@@ -7,18 +7,28 @@ from pathlib import Path
 from typing import Any
 
 from h5p_mcp.generators.blanks_generator import BlanksGenerator
+from h5p_mcp.generators.interactivebook_generator import InteractiveBookGenerator
 from h5p_mcp.generators.interactivevideo_generator import InteractiveVideoGenerator
 from h5p_mcp.generators.mcq_generator import MCQGenerator
 from h5p_mcp.generators.questionset_generator import QuestionSetGenerator
 from h5p_mcp.generators.truefalse_generator import TrueFalseGenerator
-from h5p_mcp.libraries import dependency_entry, embed_types, library_spec
+from h5p_mcp.libraries import (
+    ADVANCED_TEXT,
+    COLUMN,
+    LibrarySpec,
+    dependency_entry_for_spec,
+    embed_types,
+    library_spec,
+)
 from h5p_mcp.models.quiz_models import (
     FillBlanksQuiz,
+    InteractiveBookQuiz,
     InteractiveVideoQuiz,
     MCQQuiz,
     QuestionSetQuiz,
     QuizModel,
     QuizType,
+    TextSection,
     TrueFalseQuiz,
 )
 from h5p_mcp.utils.file_utils import resolve_export_dir, safe_filename, temp_workdir, write_json
@@ -60,6 +70,10 @@ class H5PExporter:
         )
         self._iv = InteractiveVideoGenerator(
             template_path=self._templates_dir / "interactivevideo" / "content.json",
+            templates_dir=self._templates_dir,
+        )
+        self._ib = InteractiveBookGenerator(
+            template_path=self._templates_dir / "interactivebook" / "content.json",
             templates_dir=self._templates_dir,
         )
 
@@ -105,6 +119,8 @@ class H5PExporter:
             return self._qs.generate_content_json(quiz)
         if isinstance(quiz, InteractiveVideoQuiz):
             return self._iv.generate_content_json(quiz)
+        if isinstance(quiz, InteractiveBookQuiz):
+            return self._ib.generate_content_json(quiz)
         raise ValueError(f"Unsupported quiz model: {type(quiz).__name__}")
 
     def _build_h5p_manifest(self, quiz: QuizModel) -> dict[str, Any]:
@@ -115,7 +131,9 @@ class H5PExporter:
             "language": "en",
             "mainLibrary": main_library,
             "embedTypes": embed_types(quiz.type),
-            "preloadedDependencies": [dependency_entry(t) for t in _collect_quiz_types(quiz)],
+            "preloadedDependencies": [
+                dependency_entry_for_spec(spec) for spec in _collect_libraries(quiz)
+            ],
         }
 
     def _ensure_content_metadata(self, content_json: dict[str, Any], *, title: str) -> dict[str, Any]:
@@ -142,21 +160,32 @@ class H5PExporter:
         return content_json
 
 
-def _collect_quiz_types(quiz: QuizModel) -> list[QuizType]:
+def _collect_libraries(quiz: QuizModel) -> list[LibrarySpec]:
     """
     List every library the content instantiates, main library first.
 
     Container types embed other content types by name inside content.json, and
     H5P expects each of those to be declared in h5p.json. Declaring only the
-    main library leaves a host free to drop the embedded questions instead of
+    main library leaves a host free to drop the embedded content instead of
     reporting a missing library.
+
+    Interactive Book reaches two levels deep: the book instantiates a Column
+    per chapter, and each Column instantiates its sections.
     """
-    found: list[QuizType] = [quiz.type]
+    found: list[LibrarySpec] = [library_spec(quiz.type)]
 
     if isinstance(quiz, QuestionSetQuiz):
-        found.extend(q.type for q in quiz.questions)
+        found.extend(library_spec(q.type) for q in quiz.questions)
     elif isinstance(quiz, InteractiveVideoQuiz):
-        found.extend(item.question.type for item in quiz.interactions)
+        found.extend(library_spec(item.question.type) for item in quiz.interactions)
+    elif isinstance(quiz, InteractiveBookQuiz):
+        found.append(COLUMN)
+        for chapter in quiz.chapters:
+            for section in chapter.sections:
+                if isinstance(section, TextSection):
+                    found.append(ADVANCED_TEXT)
+                else:
+                    found.append(library_spec(section.type))
 
     # Preserve first-seen order so the main library stays first.
     return list(dict.fromkeys(found))

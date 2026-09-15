@@ -25,6 +25,7 @@ class QuizType(str, Enum):
     blanks = "blanks"
     questionset = "questionset"
     interactivevideo = "interactivevideo"
+    interactivebook = "interactivebook"
 
 
 class QuizBase(BaseModel):
@@ -188,7 +189,65 @@ class InteractiveVideoQuiz(QuizBase):
         return self
 
 
-QuizModel = MCQQuiz | TrueFalseQuiz | FillBlanksQuiz | QuestionSetQuiz | InteractiveVideoQuiz
+class TextSection(BaseModel):
+    """
+    A block of prose inside a book chapter, exported as H5P.AdvancedText.
+
+    Input is plain text, not HTML: an optional heading plus paragraphs
+    separated by blank lines. Author text is escaped on the way out, so markup
+    typed into `body` appears literally rather than being rendered.
+    """
+
+    type: Literal["text"] = "text"
+    heading: str = Field(default="", max_length=300)
+    body: str = Field(min_length=1, max_length=20000)
+
+    @field_validator("body")
+    @classmethod
+    def _non_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("body must contain text")
+        return v
+
+
+BookSection = TextSection | MCQQuiz | TrueFalseQuiz | FillBlanksQuiz
+
+
+class BookChapter(BaseModel):
+    """
+    One page of an Interactive Book, exported as an H5P.Column of sections.
+
+    The chapter title is what the reader sees in the table of contents; H5P
+    reads it from the chapter's metadata rather than its parameters.
+    """
+
+    title: str = Field(min_length=1, max_length=300)
+    sections: list[BookSection] = Field(min_length=1, max_length=50)
+
+
+class InteractiveBookQuiz(QuizBase):
+    """
+    A multi-chapter book with prose and questions, exported as
+    H5P.InteractiveBook.
+    """
+
+    type: Literal[QuizType.interactivebook] = QuizType.interactivebook
+    chapters: list[BookChapter] = Field(min_length=1, max_length=50)
+    show_cover: bool = True
+    cover_description: str = Field(default="", max_length=4000)
+    base_color: str = Field(default="#1768c4", max_length=32)
+    display_summary: bool = True
+
+    @field_validator("base_color")
+    @classmethod
+    def _validate_color(cls, v: str) -> str:
+        colour = v.strip()
+        if not re.match(r"^#[0-9a-fA-F]{6}$", colour):
+            raise ValueError("base_color must be a hex colour such as #1768c4")
+        return colour
+
+
+QuizModel = MCQQuiz | TrueFalseQuiz | FillBlanksQuiz | QuestionSetQuiz | InteractiveVideoQuiz | InteractiveBookQuiz
 
 
 class ExportRequest(BaseModel):
