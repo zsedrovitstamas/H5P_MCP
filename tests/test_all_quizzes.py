@@ -454,7 +454,10 @@ class TestFillBlanksExport:
         content = _read_content_json(result.output_path)
         assert "questions" in content
         assert content["questions"]
-        assert "*Paris*" in content["questions"][0]["question"]
+        # H5P.Blanks semantics defines `questions` as a list of html text
+        # fields, so each entry is a plain string, not a wrapper object.
+        assert isinstance(content["questions"][0], str)
+        assert "*Paris*" in content["questions"][0]
 
 
 class TestQuestionSetExport:

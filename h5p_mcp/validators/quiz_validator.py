@@ -8,7 +8,8 @@ from zipfile import ZipFile
 
 from pydantic import TypeAdapter, ValidationError
 
-from h5p_mcp.models.quiz_models import QuizModel, QuizType
+from h5p_mcp.libraries import LIBRARIES
+from h5p_mcp.models.quiz_models import QuizModel
 
 # TypeAdapter is required for validating against a union type alias (X | Y | Z).
 # Plain union aliases don't expose .model_validate() the way BaseModel subclasses do.
@@ -82,12 +83,7 @@ def validate_h5p_package(path: str | Path) -> H5PValidationResult:
             if isinstance(h5p_json, dict) and isinstance(content_json, dict):
                 main = h5p_json.get("mainLibrary")
                 if main and isinstance(main, str):
-                    expected = {
-                        "H5P.MultiChoice": QuizType.mcq,
-                        "H5P.TrueFalse": QuizType.truefalse,
-                        "H5P.Blanks": QuizType.blanks,
-                        "H5P.QuestionSet": QuizType.questionset,
-                    }
+                    expected = {name for name, _major, _minor in LIBRARIES.values()}
                     if main not in expected:
                         warnings.append(f"Unknown mainLibrary '{main}'. Package may still import if installed.")
 

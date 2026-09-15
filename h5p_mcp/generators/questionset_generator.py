@@ -8,6 +8,7 @@ from typing import Any
 from h5p_mcp.generators.blanks_generator import BlanksGenerator
 from h5p_mcp.generators.mcq_generator import MCQGenerator
 from h5p_mcp.generators.truefalse_generator import TrueFalseGenerator
+from h5p_mcp.libraries import library_string, subcontent_metadata
 from h5p_mcp.models.quiz_models import FillBlanksQuiz, MCQQuiz, QuestionSetQuiz, TrueFalseQuiz
 from h5p_mcp.utils.html_utils import as_paragraph
 
@@ -51,22 +52,18 @@ class QuestionSetGenerator:
 
     def _to_question_instance(self, q: MCQQuiz | TrueFalseQuiz | FillBlanksQuiz) -> dict[str, Any]:
         if isinstance(q, MCQQuiz):
-            return {
-                "library": "H5P.MultiChoice 1.16",
-                "params": self._mcq.generate_content_json(q),
-                "subContentId": str(uuid.uuid4()),
-            }
-        if isinstance(q, TrueFalseQuiz):
-            return {
-                "library": "H5P.TrueFalse 1.8",
-                "params": self._tf.generate_content_json(q),
-                "subContentId": str(uuid.uuid4()),
-            }
-        if isinstance(q, FillBlanksQuiz):
-            return {
-                "library": "H5P.Blanks 1.14",
-                "params": self._blanks.generate_content_json(q),
-                "subContentId": str(uuid.uuid4()),
-            }
-        raise ValueError(f"Unsupported question type in QuestionSet: {type(q).__name__}")
+            params = self._mcq.generate_content_json(q)
+        elif isinstance(q, TrueFalseQuiz):
+            params = self._tf.generate_content_json(q)
+        elif isinstance(q, FillBlanksQuiz):
+            params = self._blanks.generate_content_json(q)
+        else:
+            raise ValueError(f"Unsupported question type in QuestionSet: {type(q).__name__}")
+
+        return {
+            "library": library_string(q.type),
+            "params": params,
+            "subContentId": str(uuid.uuid4()),
+            "metadata": subcontent_metadata(q.type, q.title),
+        }
 

@@ -8,7 +8,15 @@ from typing import Any
 from fastmcp import FastMCP
 
 from h5p_mcp.exporters.h5p_exporter import H5PExporter
-from h5p_mcp.models.quiz_models import FillBlanksQuiz, MCQQuiz, QuestionSetQuiz, QuizModel, TrueFalseQuiz
+from h5p_mcp.models.quiz_models import (
+    FillBlanksQuiz,
+    InteractiveVideoQuiz,
+    MCQQuiz,
+    QuestionSetQuiz,
+    QuizModel,
+    TrueFalseQuiz,
+    VideoInteraction,
+)
 from h5p_mcp.utils.markdown_utils import parse_markdown_quizzes
 from h5p_mcp.validators.quiz_validator import H5PValidationResult, validate_h5p_package, validate_quiz_data
 
@@ -106,6 +114,39 @@ def create_questionset_quiz(
     return quiz.model_dump()
 
 @mcp.tool()
+def create_interactive_video(
+    title: str,
+    video_url: str,
+    interactions: list[dict[str, Any]],
+    summary: str = "",
+    start_video_at: int = 0,
+) -> dict[str, Any]:
+    """
+    Create a validated canonical Interactive Video object.
+
+    The video stays external and is referenced by URL (YouTube or a direct
+    .mp4/.webm/.ogv link) — it is never copied into the .h5p package.
+
+    Each entry in `interactions` is:
+      time      seconds into the video where the question appears (required)
+      question  a canonical quiz dict (mcq/truefalse/blanks) (required)
+      duration  seconds it stays visible (default 10)
+      pause     pause the video when it appears (default true)
+      display   "button" (click to open) or "poster" (shown over the video)
+      label     optional caption shown next to the button
+    """
+    parsed = [VideoInteraction.model_validate(item) for item in interactions]
+    quiz = InteractiveVideoQuiz(
+        title=title,
+        video_url=video_url,
+        interactions=parsed,
+        summary=summary,
+        start_video_at=start_video_at,
+    )
+    return quiz.model_dump()
+
+
+@mcp.tool()
 def export_h5p(quiz_data: dict[str, Any], output_name: str) -> dict[str, Any]:
     """
     Export a canonical quiz object to a .h5p file.
@@ -198,6 +239,33 @@ def h5p_prompt_helpers() -> dict[str, Any]:
                 "answers": ["Paris"],
             },
         },
+        "interactive_video": {
+            "notes": [
+                "video_url must be an http(s) URL; the video is never bundled into the package",
+                "YouTube links are detected automatically, as are .mp4/.webm/.ogv files",
+                "each interaction needs a time (seconds) and a canonical question dict",
+                "interactions are sorted by time on validation, so order does not matter",
+            ],
+            "example": {
+                "title": "Photosynthesis explained",
+                "video_url": "https://www.youtube.com/watch?v=example",
+                "summary": "Watch the clip and answer as you go.",
+                "interactions": [
+                    {
+                        "time": 45,
+                        "duration": 15,
+                        "pause": True,
+                        "question": {
+                            "type": "truefalse",
+                            "title": "Checkpoint",
+                            "question": "Chlorophyll absorbs green light most strongly.",
+                            "correct_answer": False,
+                            "explanation": "Green is largely reflected, which is why leaves look green.",
+                        },
+                    }
+                ],
+            },
+        },
     }
 
 
@@ -275,6 +343,41 @@ def _generate_samples() -> list[Path]:
                 answers=["[1, 2, 3]"],
             ),
             output_name="sample_blanks_python",
+        ).output_path
+    )
+
+    # Interactive Video sample (timed questions over an external video)
+    outputs.append(
+        exporter.export(
+            InteractiveVideoQuiz(
+                title="Interactive Video - Water Cycle",
+                video_url="https://www.youtube.com/watch?v=al-do-HGuIk",
+                summary="Watch the clip and answer the questions as they appear.",
+                interactions=[
+                    VideoInteraction(
+                        time=30,
+                        question=TrueFalseQuiz(
+                            title="Evaporation",
+                            question="Evaporation turns liquid water into vapour.",
+                            correct_answer=True,
+                            explanation="Heat gives water molecules enough energy to escape as vapour.",
+                        ),
+                    ),
+                    VideoInteraction(
+                        time=75,
+                        duration=20,
+                        display="poster",
+                        question=MCQQuiz(
+                            title="Condensation",
+                            question="What forms when water vapour cools and condenses?",
+                            choices=["Clouds", "Lava", "Sand"],
+                            correct_answer="Clouds",
+                            explanation="Cooling vapour condenses onto particles and forms clouds.",
+                        ),
+                    ),
+                ],
+            ),
+            output_name="sample_interactivevideo_water_cycle",
         ).output_path
     )
 

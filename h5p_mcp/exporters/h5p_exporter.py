@@ -2,16 +2,25 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from h5p_mcp.generators.blanks_generator import BlanksGenerator
+from h5p_mcp.generators.interactivevideo_generator import InteractiveVideoGenerator
 from h5p_mcp.generators.mcq_generator import MCQGenerator
 from h5p_mcp.generators.questionset_generator import QuestionSetGenerator
 from h5p_mcp.generators.truefalse_generator import TrueFalseGenerator
-from h5p_mcp.models.quiz_models import FillBlanksQuiz, MCQQuiz, QuestionSetQuiz, QuizModel, QuizType, TrueFalseQuiz
+from h5p_mcp.libraries import dependency_entry, embed_types, library_spec
+from h5p_mcp.models.quiz_models import (
+    FillBlanksQuiz,
+    InteractiveVideoQuiz,
+    MCQQuiz,
+    QuestionSetQuiz,
+    QuizModel,
+    QuizType,
+    TrueFalseQuiz,
+)
 from h5p_mcp.utils.file_utils import resolve_export_dir, safe_filename, temp_workdir, write_json
 from h5p_mcp.utils.zip_utils import zip_dir
 
@@ -47,6 +56,10 @@ class H5PExporter:
             self._templates_dir / "blanks" / "content.json")
         self._qs = QuestionSetGenerator(
             template_path=self._templates_dir / "questionset" / "content.json",
+            templates_dir=self._templates_dir,
+        )
+        self._iv = InteractiveVideoGenerator(
+            template_path=self._templates_dir / "interactivevideo" / "content.json",
             templates_dir=self._templates_dir,
         )
 
@@ -90,23 +103,19 @@ class H5PExporter:
             return self._blanks.generate_content_json(quiz)
         if isinstance(quiz, QuestionSetQuiz):
             return self._qs.generate_content_json(quiz)
+        if isinstance(quiz, InteractiveVideoQuiz):
+            return self._iv.generate_content_json(quiz)
         raise ValueError(f"Unsupported quiz model: {type(quiz).__name__}")
 
     def _build_h5p_manifest(self, quiz: QuizModel) -> dict[str, Any]:
-        main_library, major, minor = _library_for_type(quiz.type)
+        main_library, _major, _minor = library_spec(quiz.type)
         # Keep this minimal. Some validators reject unknown or mis-typed keys.
         return {
             "title": quiz.title,
             "language": "en",
             "mainLibrary": main_library,
-            "embedTypes": ["div"],
-            "preloadedDependencies": [
-                {
-                    "machineName": main_library,
-                    "majorVersion": major,
-                    "minorVersion": minor,
-                }
-            ],
+            "embedTypes": embed_types(quiz.type),
+            "preloadedDependencies": [dependency_entry(t) for t in _collect_quiz_types(quiz)],
         }
 
     def _ensure_content_metadata(self, content_json: dict[str, Any], *, title: str) -> dict[str, Any]:
@@ -127,21 +136,27 @@ class H5PExporter:
         meta.setdefault("defaultLanguage", "en")
         meta.setdefault("authors", [])
         meta.setdefault("changes", [])
-        meta.setdefault("extraTitle", str(uuid.uuid4()))
+        meta.setdefault("extraTitle", title)
 
         content_json["metadata"] = meta
         return content_json
 
 
-def _library_for_type(qtype: QuizType) -> tuple[str, int, int]:
-    # These version numbers are commonly installed; platforms tolerate mismatch
-    # as long as a compatible library is installed. Keep conservative defaults.
-    if qtype == QuizType.mcq:
-        return ("H5P.MultiChoice", 1, 16)
-    if qtype == QuizType.truefalse:
-        return ("H5P.TrueFalse", 1, 8)
-    if qtype == QuizType.blanks:
-        return ("H5P.Blanks", 1, 14)
-    if qtype == QuizType.questionset:
-        return ("H5P.QuestionSet", 1, 20)
-    raise ValueError(f"Unsupported QuizType: {qtype}")
+def _collect_quiz_types(quiz: QuizModel) -> list[QuizType]:
+    """
+    List every library the content instantiates, main library first.
+
+    Container types embed other content types by name inside content.json, and
+    H5P expects each of those to be declared in h5p.json. Declaring only the
+    main library leaves a host free to drop the embedded questions instead of
+    reporting a missing library.
+    """
+    found: list[QuizType] = [quiz.type]
+
+    if isinstance(quiz, QuestionSetQuiz):
+        found.extend(q.type for q in quiz.questions)
+    elif isinstance(quiz, InteractiveVideoQuiz):
+        found.extend(item.question.type for item in quiz.interactions)
+
+    # Preserve first-seen order so the main library stays first.
+    return list(dict.fromkeys(found))

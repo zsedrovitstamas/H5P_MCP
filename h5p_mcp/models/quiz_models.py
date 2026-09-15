@@ -24,6 +24,7 @@ class QuizType(str, Enum):
     truefalse = "truefalse"
     blanks = "blanks"
     questionset = "questionset"
+    interactivevideo = "interactivevideo"
 
 
 class QuizBase(BaseModel):
@@ -125,7 +126,63 @@ class QuestionSetQuiz(QuizBase):
         return self
 
 
-QuizModel = MCQQuiz | TrueFalseQuiz | FillBlanksQuiz | QuestionSetQuiz
+QuestionModel = MCQQuiz | TrueFalseQuiz | FillBlanksQuiz
+
+
+class VideoInteraction(BaseModel):
+    """
+    One question pinned to a point on a video's timeline.
+
+    `time` is when the interaction appears and `duration` how long it stays
+    visible; H5P stores these as an absolute from/to pair.
+    """
+
+    time: float = Field(ge=0, description="Seconds into the video where the interaction appears")
+    duration: float = Field(default=10.0, gt=0, le=3600, description="How many seconds it stays visible")
+    pause: bool = Field(default=True, description="Pause the video when the interaction appears")
+    display: Literal["button", "poster"] = "button"
+    label: str = Field(default="", max_length=200)
+    question: QuestionModel
+
+    @model_validator(mode="after")
+    def _no_container_questions(self) -> "VideoInteraction":
+        if getattr(self.question, "type", None) in (QuizType.questionset, QuizType.interactivevideo):
+            raise ValueError("Video interactions take a single question, not a container")
+        return self
+
+
+class InteractiveVideoQuiz(QuizBase):
+    """
+    A video with questions overlaid at timecodes, exported as H5P.InteractiveVideo.
+
+    The video itself is referenced by URL and never copied into the package:
+    embedding media would blow past typical LMS upload limits, and H5P resolves
+    external sources (YouTube or a direct file URL) at playback time.
+    """
+
+    type: Literal[QuizType.interactivevideo] = QuizType.interactivevideo
+    video_url: str = Field(min_length=1, max_length=2000)
+    interactions: list[VideoInteraction] = Field(min_length=1, max_length=100)
+    summary: str = Field(default="", max_length=4000, description="Short description on the start screen")
+    start_video_at: int = Field(default=0, ge=0)
+
+    @field_validator("video_url")
+    @classmethod
+    def _validate_url(cls, v: str) -> str:
+        url = v.strip()
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            raise ValueError("video_url must be an http(s) URL")
+        return url
+
+    @model_validator(mode="after")
+    def _sort_interactions(self) -> "InteractiveVideoQuiz":
+        # H5P renders in list order; keeping them sorted makes the exported
+        # timeline match the order an author reads.
+        self.interactions.sort(key=lambda i: i.time)
+        return self
+
+
+QuizModel = MCQQuiz | TrueFalseQuiz | FillBlanksQuiz | QuestionSetQuiz | InteractiveVideoQuiz
 
 
 class ExportRequest(BaseModel):

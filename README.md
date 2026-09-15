@@ -13,6 +13,7 @@ It **does not bundle H5P libraries** (that’s normal for content exports). Your
 - `H5P.TrueFalse`
 - `H5P.Blanks`
 - `H5P.QuestionSet`
+- `H5P.InteractiveVideo`
 
 ## Project structure
 
@@ -24,11 +25,16 @@ h5p_mcp/
 ├── templates/
 │   ├── mcq/
 │   ├── truefalse/
-│   └── blanks/
+│   ├── blanks/
+│   ├── questionset/
+│   └── interactivevideo/
+├── libraries.py
 ├── generators/
 │   ├── mcq_generator.py
 │   ├── truefalse_generator.py
-│   └── blanks_generator.py
+│   ├── blanks_generator.py
+│   ├── questionset_generator.py
+│   └── interactivevideo_generator.py
 ├── exporters/
 │   └── h5p_exporter.py
 ├── validators/
@@ -90,6 +96,7 @@ In Cursor, configure an MCP server and point it at the same `python server.py` e
 - `create_true_false_quiz(title, question, correct_answer, explanation)`
 - `create_fill_blanks_quiz(title, text, answers)`
 - `create_questionset_quiz(title, intro, questions, pass_percentage)`
+- `create_interactive_video(title, video_url, interactions, summary, start_video_at)`
 - `export_h5p(quiz_data, output_name)`
 - `validate_h5p(path)`
 - Bonus:
@@ -131,6 +138,27 @@ python -m h5p_mcp.server --generate-samples
 ```
 
 This writes a **set of sample `.h5p` files** (including a mixed-type `QuestionSet`) into `exports/`.
+
+## Interactive Video
+
+Put questions on a video timeline. The video is **referenced by URL and never
+copied into the package** — embedding media would exceed typical LMS upload
+limits, and H5P resolves the source at playback time. YouTube links and direct
+`.mp4` / `.webm` / `.ogv` files are both detected automatically.
+
+Call `create_interactive_video` with a list of interactions:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `time` | yes | Seconds into the video where the question appears |
+| `question` | yes | A canonical quiz dict (`mcq`, `truefalse` or `blanks`) |
+| `duration` | no | Seconds it stays visible (default `10`) |
+| `pause` | no | Pause the video when it appears (default `true`) |
+| `display` | no | `"button"` to click open, or `"poster"` shown over the video |
+| `label` | no | Caption next to the button |
+
+Interactions are sorted by `time` during validation, so the order you pass them
+in does not matter. Then call `export_h5p` as usual.
 
 ## Markdown-to-quiz format (bonus)
 
