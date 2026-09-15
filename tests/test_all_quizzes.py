@@ -29,15 +29,10 @@ if str(ROOT) not in sys.path:
 # Helpers
 # ---------------------------------------------------------------------------
 
-EXPORT_DIR = ROOT / "h5p_mcp" / "exports" / "test_outputs"
-
-
 @pytest.fixture(scope="session")
 def exporter(tmp_path_factory):
-    """One exporter that writes all test .h5p files to a dedicated directory."""
-    out = EXPORT_DIR
-    out.mkdir(parents=True, exist_ok=True)
-    return H5PExporter(export_dir=str(out))
+    """One exporter that writes all test .h5p files to a temporary directory."""
+    return H5PExporter(export_dir=str(tmp_path_factory.mktemp("test_outputs")))
 
 
 def _assert_valid_h5p(path: Path) -> None:

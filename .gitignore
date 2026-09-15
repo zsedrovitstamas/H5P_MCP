@@ -4,3 +4,8 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+
+# Test scratch output (samples are kept)
+h5p_mcp/exports/test_outputs/
+h5p_mcp/exports/batch_test_*.h5p
+h5p_mcp/exports/tool_export_*.h5p
