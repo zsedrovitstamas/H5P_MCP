@@ -77,6 +77,12 @@ class FillBlanksQuiz(QuizBase):
         description="Text containing H5P.Blanks asterisk-wrapped answers, e.g. 'The capital is *Paris*.'",
     )
     answers: list[str] = Field(min_length=1, max_length=50)
+    instructions: str = Field(
+        default="Fill in the missing words.",
+        min_length=1,
+        max_length=500,
+        description="Task description shown above the exercise",
+    )
 
     @field_validator("text", mode="before")
     @classmethod
@@ -190,28 +196,50 @@ class ExportRequest(BaseModel):
     output_name: str = Field(min_length=1, max_length=120)
 
 
+def split_blanks(text: str) -> list[tuple[bool, str]]:
+    """
+    Split H5P.Blanks text into (is_answer, chunk) segments.
+
+    Asterisks toggle between prose and answer, so "A *cat* sits" yields
+    [(False, "A "), (True, "cat"), (False, " sits")]. A trailing asterisk that
+    never closes leaves its remainder as prose, matching how an unterminated
+    gap is simply not a gap.
+
+    This is the single source of truth for asterisk parsing: both answer
+    extraction and HTML escaping read the text through it, so what gets
+    validated as an answer is exactly what gets rendered as one.
+    """
+    segments: list[tuple[bool, str]] = []
+    buf: list[str] = []
+    in_answer = False
+
+    for ch in text:
+        if ch == "*":
+            segments.append((in_answer, "".join(buf)))
+            buf = []
+            in_answer = not in_answer
+            continue
+        buf.append(ch)
+
+    tail = "".join(buf)
+    if in_answer:
+        # Unclosed gap: the opening asterisk was literal after all.
+        segments.append((False, "*" + tail))
+    else:
+        segments.append((False, tail))
+
+    return [(is_answer, chunk) for is_answer, chunk in segments if chunk != ""]
+
+
 def extract_asterisk_answers(text: str) -> list[str]:
     """
     Extract asterisk-wrapped answers from H5P.Blanks text.
 
     Example: "A *cat* and a *dog*." -> ["cat", "dog"]
     """
-    results: list[str] = []
-    in_token = False
-    buf: list[str] = []
-    for ch in text:
-        if ch == "*":
-            if in_token:
-                token = "".join(buf).strip()
-                if token:
-                    results.append(token)
-                buf = []
-                in_token = False
-            else:
-                in_token = True
-                buf = []
-            continue
-        if in_token:
-            buf.append(ch)
-    return results
+    return [
+        stripped
+        for is_answer, chunk in split_blanks(text)
+        if is_answer and (stripped := chunk.strip())
+    ]
 
